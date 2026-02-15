@@ -16,5 +16,8 @@ src-tauri/gen/
 # Reference images (not used in build)
 web/img/
 
+# Legacy X11 bitmap headers (replaced by SVG buttons)
+src/emu/bitmaps/
+
 # Claude memory
 memory/
