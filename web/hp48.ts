@@ -159,6 +159,18 @@ function setupButtonInput(): void {
 // Keyboard input
 // ---------------------------------------------------------------------------
 
+/** Queue key events with delays so the emulator has time to scan the keyboard
+ *  matrix between each event (needed for shift/alpha combos). */
+function pushKeySequence(events: number[], delay = 20): void {
+  events.forEach((code, i) => {
+    if (i === 0) {
+      Module._push_key_event(code);
+    } else {
+      setTimeout(() => Module._push_key_event(code), i * delay);
+    }
+  });
+}
+
 function setupKeyboardInput(): void {
   document.addEventListener("keydown", (e) => {
     // Direct button mapping (numbers, operators, arrows, etc.)
@@ -177,10 +189,12 @@ function setupKeyboardInput(): void {
       if (e.repeat) return;
       e.preventDefault();
       const [shiftBtn, targetBtn] = shiftCombo;
-      Module._push_key_event(shiftBtn + 1);      // shift press
-      Module._push_key_event(targetBtn + 1);      // key press (shift held)
-      Module._push_key_event(targetBtn + 101);    // key release
-      Module._push_key_event(shiftBtn + 101);    // shift release
+      pushKeySequence([
+        shiftBtn + 1,       // shift press
+        targetBtn + 1,      // key press (shift held)
+        targetBtn + 101,    // key release
+        shiftBtn + 101,     // shift release
+      ]);
       return;
     }
 
@@ -189,10 +203,12 @@ function setupKeyboardInput(): void {
     if (alphaBtn !== undefined) {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       e.preventDefault();
-      Module._push_key_event(ALPHA_BTN + 1);      // ALPHA press
-      Module._push_key_event(alphaBtn + 1);        // letter press (ALPHA still held)
-      Module._push_key_event(alphaBtn + 101);      // letter release
-      Module._push_key_event(ALPHA_BTN + 101);    // ALPHA release
+      pushKeySequence([
+        ALPHA_BTN + 1,      // ALPHA press
+        alphaBtn + 1,       // letter press (ALPHA still held)
+        alphaBtn + 101,     // letter release
+        ALPHA_BTN + 101,    // ALPHA release
+      ]);
       return;
     }
   });

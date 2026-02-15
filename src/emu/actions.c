@@ -655,10 +655,6 @@ do_shutdown_check()
     set_t1 = ticks.t1_ticks;
 
     interrupt_called = 0;
-    if (GetEvent()) {
-      if (interrupt_called)
-        wake = 1;
-    }
 
     if (saturn.timer2 <= 0)
       {
@@ -696,6 +692,13 @@ do_shutdown_check()
         wake = 1;
     }
 
+  }
+
+  /* Process key events every cycle for responsiveness */
+  interrupt_called = 0;
+  if (GetEvent()) {
+    if (interrupt_called)
+      wake = 1;
   }
 
   if (enter_debugger)

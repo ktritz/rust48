@@ -5,16 +5,28 @@
 #ifndef _ANNUNC_H
 #define _ANNUNC_H 1
 
-#define STUB_BITMAP(name) \
-  static unsigned int name##_width = 0; \
-  static unsigned int name##_height = 0; \
-  static unsigned char name##_bits[] = {0};
+#define ann_alpha_width 0
+#define ann_alpha_height 0
+static unsigned char ann_alpha_bits[] = {0};
 
-STUB_BITMAP(ann_alpha)
-STUB_BITMAP(ann_battery)
-STUB_BITMAP(ann_busy)
-STUB_BITMAP(ann_io)
-STUB_BITMAP(ann_left)
-STUB_BITMAP(ann_right)
+#define ann_battery_width 0
+#define ann_battery_height 0
+static unsigned char ann_battery_bits[] = {0};
+
+#define ann_busy_width 0
+#define ann_busy_height 0
+static unsigned char ann_busy_bits[] = {0};
+
+#define ann_io_width 0
+#define ann_io_height 0
+static unsigned char ann_io_bits[] = {0};
+
+#define ann_left_width 0
+#define ann_left_height 0
+static unsigned char ann_left_bits[] = {0};
+
+#define ann_right_width 0
+#define ann_right_height 0
+static unsigned char ann_right_bits[] = {0};
 
 #endif /* !_ANNUNC_H */

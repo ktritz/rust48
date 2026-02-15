@@ -2418,12 +2418,13 @@ schedule()
 
   schedule_event--;
 
+  GetEvent();  /* Process key events every instruction cycle for responsiveness */
+
   if (got_alarm) {
     got_alarm = 0;
 #ifdef HAVE_XSHM
     if (disp.display_update) refresh_display();
 #endif
-    GetEvent();
   }
 
 }
