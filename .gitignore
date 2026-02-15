@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build artifacts - Emscripten
+web/hp48_emu.js
+web/hp48_emu.wasm
+web/hp48_emu.data
+
+# Build artifacts - esbuild
+web/hp48.js
+
+# Build artifacts - Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Reference images (not used in build)
+web/img/
+
+# Claude memory
+memory/

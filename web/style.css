@@ -1,0 +1,216 @@
+/* HP-48 GX Web Emulator - Calculator Skin */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #1a1a2e;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100dvh;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #ccc;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+/* --- Calculator body (droid48 face color: rgb(48,56,72)) --- */
+
+#calculator {
+  background:
+    linear-gradient(
+      175deg,
+      rgba(255,255,255,0.06) 0%,
+      rgba(255,255,255,0.02) 30%,
+      transparent 50%,
+      rgba(0,0,0,0.04) 75%,
+      rgba(0,0,0,0.10) 100%
+    ),
+    rgb(48, 56, 72);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.15),
+    inset 1px 0 0 rgba(255,255,255,0.04),
+    inset -1px 0 0 rgba(255,255,255,0.04);
+  width: min(540px, 100vw, 58dvh);
+  width: min(540px, 100vw, 58vh);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  position: relative;
+}
+
+/* Plastic noise texture overlay */
+#calculator::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- Display area --- */
+
+#display-area {
+  margin-bottom: 4px;
+  position: relative;
+  z-index: 1;
+  border-radius: 5px;
+  padding: 8px;
+  border: none;
+  background:
+    /* Depth gradient: darkens toward inner edge of bevel */
+    radial-gradient(
+      ellipse 60% 55% at 55% 58%,
+      rgba(0,0,0,0.30) 0%,
+      rgba(0,0,0,0.15) 50%,
+      transparent 80%
+    ),
+    /* Face lighting: dark top/left slopes, light bottom/right slopes */
+    conic-gradient(
+      from 45deg,
+      rgba(0,0,0,0.30) 0deg,
+      rgba(0,0,0,0.25) 70deg,
+      rgba(0,0,0,0.05) 90deg,
+      rgba(255,255,255,0.06) 110deg,
+      rgba(255,255,255,0.12) 155deg,
+      rgba(255,255,255,0.12) 205deg,
+      rgba(255,255,255,0.06) 250deg,
+      rgba(0,0,0,0.05) 270deg,
+      rgba(0,0,0,0.20) 290deg,
+      rgba(0,0,0,0.30) 360deg
+    ),
+    /* Base: calculator body color */
+    rgb(48, 56, 72);
+  box-shadow:
+    /* Sharp depth from top */
+    inset 0 1px 0 rgba(0,0,0,0.20),
+    inset 0 2px 1px rgba(0,0,0,0.18),
+    inset 0 4px 2px rgba(0,0,0,0.14),
+    inset 0 7px 4px rgba(0,0,0,0.08),
+    /* Sharp depth from left */
+    inset 1px 0 0 rgba(0,0,0,0.15),
+    inset 2px 0 1px rgba(0,0,0,0.12),
+    inset 4px 0 2px rgba(0,0,0,0.08),
+    /* Light slope from bottom */
+    inset 0 -1px 0 rgba(255,255,255,0.10),
+    inset 0 -3px 2px rgba(255,255,255,0.06),
+    inset 0 -6px 4px rgba(255,255,255,0.03),
+    /* Light slope from right */
+    inset -1px 0 0 rgba(255,255,255,0.08),
+    inset -3px 0 2px rgba(255,255,255,0.05),
+    /* Outer bottom lip highlight */
+    0 2px 0 rgba(255,255,255,0.10);
+}
+
+#display-wrapper {
+  position: relative;
+}
+
+#lcd {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #BCC4A5;
+  border-radius: 2px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* --- Loading spinner --- */
+
+#loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+#loading.hidden { display: none; }
+
+#loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255,255,255,0.15);
+  border-top-color: #ABB473;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 8px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#loading p {
+  font-size: 12px;
+  color: #889;
+}
+
+/* --- Button grid --- */
+
+#buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 2px;
+  -webkit-touch-callout: none;
+  position: relative;
+  z-index: 1;
+}
+
+.btn-row {
+  display: flex;
+  gap: 0;
+}
+
+.btn-row.menu-row {
+  margin-bottom: 2px;
+}
+
+/* --- Button images --- */
+
+.btn {
+  flex: 1;
+  width: 0;
+  height: auto;
+  display: block;
+  overflow: visible;
+  cursor: pointer;
+  transition: filter 0.06s;
+  -webkit-touch-callout: none;
+}
+
+/* ENTER button is double width */
+.btn-wide {
+  flex: 2;
+}
+
+/* Press feedback */
+.btn:active,
+.btn.pressed {
+  filter: brightness(0.65);
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 560px) {
+  #calculator {
+    border-radius: 0;
+    padding: 8px;
+    width: min(100vw, 58dvh);
+    width: min(100vw, 58vh);
+  }
+}
