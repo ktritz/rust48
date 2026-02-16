@@ -82,6 +82,8 @@ The project contains two independent web frontends:
 
 The Tauri desktop app uses the Rust/WASM path.
 
-## Credits
+## License
 
-Based on the x48 emulator by Eddie C. Dost and the droid48 Android port. Saturn CPU architecture by Hewlett-Packard.
+GPL-2.0-or-later. See [LICENSE](LICENSE).
+
+Derived from the [x48](https://github.com/gwenhael-le-moine/x48) emulator by Eddie C. Dost and the droid48 Android port. Saturn CPU architecture by Hewlett-Packard.
