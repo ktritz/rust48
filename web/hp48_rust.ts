@@ -1,45 +1,90 @@
-// hp48.ts — TypeScript bridge between the Emscripten WASM module and the browser.
-// Compiled to hp48.js via esbuild. Must load BEFORE hp48_emu.js.
+// hp48_rust.ts — TypeScript bridge for the Rust/wasm-bindgen WASM path.
+// Independent from hp48.ts (Emscripten/C path). Same SVG buttons, keyboard,
+// audio — different emulator interface.
 
-export {};
-
-// ---------------------------------------------------------------------------
-// Emscripten Module type declarations
-// ---------------------------------------------------------------------------
-
-interface HP48Module {
-  HEAPU8: Uint8Array;
-  onRuntimeInitialized: (() => void) | null;
-
-  _push_key_event(code: number): void;
-  _get_display_buffer(): number;
-  _get_display_width(): number;
-  _get_display_height(): number;
-  _is_display_dirty(): number;
-  _clear_display_dirty(): void;
-  _get_annunciator_state(): number;
-  _get_speaker_frequency(): number;
-  _web_save_state(): void;
-}
-
-declare global {
-  var Module: HP48Module;
-}
+import init, { Hp48 } from "../pkg/rust48.js";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DISPLAY_WIDTH = 262;
-const DISPLAY_HEIGHT = 142;
+const DISPLAY_WIDTH = 131;
+const DISPLAY_HEIGHT = 64;
 const DISPLAY_BYTES = DISPLAY_WIDTH * DISPLAY_HEIGHT * 4;
 const AUTO_SAVE_INTERVAL_MS = 30_000;
+const DB_NAME = "hp48_rust";
+const DB_STORE = "files";
+
+// ---------------------------------------------------------------------------
+// IndexedDB persistence
+// ---------------------------------------------------------------------------
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGet(key: string): Promise<Uint8Array | undefined> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readonly");
+    const req = tx.objectStore(DB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result as Uint8Array | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbPut(key: string, value: Uint8Array): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Button ID → Saturn keycode mapping (from x48_web.c buttons[].code)
+// ---------------------------------------------------------------------------
+
+const BUTTON_KEYCODES: number[] = [
+  // Row 0: menu keys A–F
+  0x14, 0x84, 0x83, 0x82, 0x81, 0x80,
+  // Row 1: MTH PRG CST VAR UP NXT
+  0x24, 0x74, 0x73, 0x72, 0x71, 0x70,
+  // Row 2: ' STO EVAL LEFT DOWN RIGHT
+  0x04, 0x64, 0x63, 0x62, 0x61, 0x60,
+  // Row 3: SIN COS TAN SQRT POWER INV
+  0x34, 0x54, 0x53, 0x52, 0x51, 0x50,
+  // Row 4: ENTER NEG EEX DEL BS
+  0x44, 0x43, 0x42, 0x41, 0x40,
+  // Row 5: ALPHA 7 8 9 DIV
+  0x35, 0x33, 0x32, 0x31, 0x30,
+  // Row 6: SHL 4 5 6 MUL
+  0x25, 0x23, 0x22, 0x21, 0x20,
+  // Row 7: SHR 1 2 3 MINUS
+  0x15, 0x13, 0x12, 0x11, 0x10,
+  // Row 8: ON 0 . SPC PLUS
+  0x8000, 0x03, 0x02, 0x01, 0x00,
+];
+
+/** Convert button ID (0–48) + press/release to Saturn key event code. */
+function buttonToKeyEvent(btnId: number, press: boolean): number {
+  const keycode = BUTTON_KEYCODES[btnId];
+  return press ? keycode : (keycode | 0x80000000) >>> 0;
+}
 
 // ---------------------------------------------------------------------------
 // Keyboard mapping: KeyboardEvent.key -> button ID (0-48)
 // ---------------------------------------------------------------------------
 
-// Direct key → button ID (for keys that map 1:1 to HP-48 buttons)
 const KEY_MAP: Record<string, number> = {
   "0": 45, "1": 40, "2": 41, "3": 42, "4": 35,
   "5": 36, "6": 37, "7": 30, "8": 31, "9": 32,
@@ -50,7 +95,6 @@ const KEY_MAP: Record<string, number> = {
   "'": 12,
 };
 
-// Alpha character → button ID (letters typed via ALPHA + button)
 const ALPHA_MAP: Record<string, number> = {
   a: 0,  b: 1,  c: 2,  d: 3,  e: 4,  f: 5,
   g: 6,  h: 7,  i: 8,  j: 9,  k: 10, l: 11,
@@ -60,36 +104,81 @@ const ALPHA_MAP: Record<string, number> = {
 };
 
 const ALPHA_BTN = 29;
-const SHL_BTN = 34;  // left shift
-const SHR_BTN = 39;  // right shift
+const SHL_BTN = 34;
+const SHR_BTN = 39;
 
-// Shift + key combos: character → [shift button, target button]
-// HP-48 operator keys have brackets/delimiters on their shift positions:
-//   LS+÷ = ()   RS+÷ = #
-//   LS+× = []   RS+× = _
-//   LS+- = «»   RS+- = ""
-//   LS++ = {}   RS++ = ::
 const SHIFT_MAP: Record<string, [number, number]> = {
-  "(": [SHL_BTN, 33],  // LS + ÷ → ()
-  ")": [SHL_BTN, 33],  // same combo (enters pair)
-  "[": [SHL_BTN, 38],  // LS + × → []
-  "]": [SHL_BTN, 38],
-  "{": [SHL_BTN, 48],  // LS + + → {}
-  "}": [SHL_BTN, 48],
-  "<": [SHL_BTN, 43],  // LS + - → «»
-  ">": [SHL_BTN, 43],
-  "#": [SHR_BTN, 33],  // RS + ÷ → #
-  "_": [SHR_BTN, 38],  // RS + × → _
-  "\"": [SHR_BTN, 43], // RS + - → ""
-  ":": [SHR_BTN, 48],  // RS + + → ::
-  ",": [SHL_BTN, 46],  // LS + . → ,
+  "(": [SHL_BTN, 33], ")": [SHL_BTN, 33],
+  "[": [SHL_BTN, 38], "]": [SHL_BTN, 38],
+  "{": [SHL_BTN, 48], "}": [SHL_BTN, 48],
+  "<": [SHL_BTN, 43], ">": [SHL_BTN, 43],
+  "#": [SHR_BTN, 33], "_": [SHR_BTN, 38],
+  "\"": [SHR_BTN, 43], ":": [SHR_BTN, 48],
+  ",": [SHL_BTN, 46],
 };
 
 const pressedKeys = new Set<string>();
 
 // ---------------------------------------------------------------------------
+// Globals
+// ---------------------------------------------------------------------------
+
+let hp48: Hp48;
+let wasmMemory: WebAssembly.Memory;
+
+// ---------------------------------------------------------------------------
 // Display rendering
 // ---------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------
+// Annunciator XBM bitmaps — from annunc.h (15×12, LSB-first, 2 bytes/row)
+// -----------------------------------------------------------------------
+
+const ANN_WIDTH = 15;
+const ANN_HEIGHT = 12;
+const ANN_CANVAS_W = 262; // matches C 2x-scale display width
+const ANN_CANVAS_H = 12;
+
+// Pixel colors matching the LCD
+const PIX_ON  = [0x10, 0x20, 0x10, 0xFF];
+const PIX_OFF = [0xBC, 0xC4, 0xA5, 0xFF];
+
+const ANN_DEFS: { bit: number; x: number; bits: number[] }[] = [
+  { bit: 0x81, x: 16, bits: [  // left shift
+    0xfe,0x3f, 0xff,0x7f, 0x9f,0x7f, 0xcf,0x7f, 0xe7,0x7f, 0x03,0x78,
+    0x03,0x70, 0xe7,0x73, 0xcf,0x73, 0x9f,0x73, 0xff,0x73, 0xfe,0x33] },
+  { bit: 0x82, x: 61, bits: [  // right shift
+    0xfe,0x3f, 0xff,0x7f, 0xff,0x7c, 0xff,0x79, 0xff,0x73, 0x0f,0x60,
+    0x07,0x60, 0xe7,0x73, 0xe7,0x79, 0xe7,0x7c, 0xe7,0x7f, 0xe6,0x3f] },
+  { bit: 0x84, x: 106, bits: [ // alpha
+    0xe0,0x03, 0x18,0x44, 0x0c,0x4c, 0x06,0x2c, 0x07,0x2c, 0x07,0x1c,
+    0x07,0x0c, 0x07,0x0c, 0x07,0x0e, 0x0e,0x4d, 0xf8,0x38, 0x00,0x00] },
+  { bit: 0x88, x: 151, bits: [ // battery
+    0x04,0x10, 0x02,0x20, 0x12,0x24, 0x09,0x48, 0xc9,0x49, 0xc9,0x49,
+    0xc9,0x49, 0x09,0x48, 0x12,0x24, 0x02,0x20, 0x04,0x10, 0x00,0x00] },
+  { bit: 0x90, x: 196, bits: [ // busy
+    0xfc,0x1f, 0x08,0x08, 0x08,0x08, 0xf0,0x07, 0xe0,0x03, 0xc0,0x01,
+    0x40,0x01, 0x20,0x02, 0x10,0x04, 0xc8,0x09, 0xe8,0x0b, 0xfc,0x1f] },
+  { bit: 0xa0, x: 241, bits: [ // IO
+    0x0c,0x00, 0x1e,0x00, 0x33,0x0c, 0x61,0x18, 0xcc,0x30, 0xfe,0x7f,
+    0xfe,0x7f, 0xcc,0x30, 0x61,0x18, 0x33,0x0c, 0x1e,0x00, 0x0c,0x00] },
+];
+
+// Pre-decode XBM bitmaps into boolean pixel arrays
+const annBitmaps: boolean[][][] = ANN_DEFS.map(def => {
+  const rows: boolean[][] = [];
+  for (let y = 0; y < ANN_HEIGHT; y++) {
+    const row: boolean[] = [];
+    const b0 = def.bits[y * 2];
+    const b1 = def.bits[y * 2 + 1];
+    const rowBits = b0 | (b1 << 8);
+    for (let x = 0; x < ANN_WIDTH; x++) {
+      row.push(((rowBits >> x) & 1) !== 0);
+    }
+    rows.push(row);
+  }
+  return rows;
+});
 
 function startDisplayLoop(): void {
   const canvas = document.getElementById("lcd") as HTMLCanvasElement | null;
@@ -99,18 +188,66 @@ function startDisplayLoop(): void {
   canvas.height = DISPLAY_HEIGHT;
 
   const ctx = canvas.getContext("2d")!;
-  if (!ctx) { console.error("hp48: no 2D context"); return; }
-
   const imageData = ctx.createImageData(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
+  // Annunciator canvas — 262×12 matching C 2x-scale header dimensions
+  const annCanvas = document.getElementById("annunciators") as HTMLCanvasElement | null;
+  let annCtx: CanvasRenderingContext2D | null = null;
+  let annImageData: ImageData | null = null;
+  if (annCanvas) {
+    annCanvas.width = ANN_CANVAS_W;
+    annCanvas.height = ANN_CANVAS_H;
+    annCtx = annCanvas.getContext("2d")!;
+    annImageData = annCtx.createImageData(ANN_CANVAS_W, ANN_CANVAS_H);
+    // Fill with LCD off color
+    for (let i = 0; i < ANN_CANVAS_W * ANN_CANVAS_H; i++) {
+      annImageData.data.set(PIX_OFF, i * 4);
+    }
+    annCtx.putImageData(annImageData, 0, 0);
+  }
+  let lastAnnunc = -1;
+
   function frame(): void {
-    if (Module._is_display_dirty()) {
-      const ptr = Module._get_display_buffer();
-      const src = Module.HEAPU8.subarray(ptr, ptr + DISPLAY_BYTES);
+    if (hp48.is_display_dirty()) {
+      const ptr = hp48.display_buffer_ptr();
+      const src = new Uint8Array(wasmMemory.buffer, ptr, DISPLAY_BYTES);
       imageData.data.set(src);
-      Module._clear_display_dirty();
+      hp48.clear_display_dirty();
       ctx.putImageData(imageData, 0, 0);
     }
+
+    // Update annunciator bitmaps
+    const annunc = hp48.annunciator_state();
+    if (annunc !== lastAnnunc && annCtx && annImageData) {
+      lastAnnunc = annunc;
+      const d = annImageData.data;
+      // Clear to off color
+      for (let i = 0; i < ANN_CANVAS_W * ANN_CANVAS_H; i++) {
+        d[i * 4]     = PIX_OFF[0];
+        d[i * 4 + 1] = PIX_OFF[1];
+        d[i * 4 + 2] = PIX_OFF[2];
+        d[i * 4 + 3] = PIX_OFF[3];
+      }
+      // Draw active annunciator bitmaps
+      for (let a = 0; a < ANN_DEFS.length; a++) {
+        if ((annunc & ANN_DEFS[a].bit) !== ANN_DEFS[a].bit) continue;
+        const bx = ANN_DEFS[a].x;
+        const bmp = annBitmaps[a];
+        for (let y = 0; y < ANN_HEIGHT; y++) {
+          for (let x = 0; x < ANN_WIDTH; x++) {
+            if (bmp[y][x]) {
+              const idx = ((y) * ANN_CANVAS_W + bx + x) * 4;
+              d[idx]     = PIX_ON[0];
+              d[idx + 1] = PIX_ON[1];
+              d[idx + 2] = PIX_ON[2];
+              d[idx + 3] = PIX_ON[3];
+            }
+          }
+        }
+      }
+      annCtx.putImageData(annImageData, 0, 0);
+    }
+
     requestAnimationFrame(frame);
   }
 
@@ -128,16 +265,13 @@ function setupButtonInput(): void {
     const btnId = parseInt(el.dataset.btn!, 10);
     if (isNaN(btnId)) return;
 
-    const pressCode = btnId + 1;         // 1-49 = press button 0-48
-    const releaseCode = btnId + 101;     // 101-149 = release button 0-48
-
     function press(): void {
       el.classList.add("pressed");
-      Module._push_key_event(pressCode);
+      hp48.push_key_event(buttonToKeyEvent(btnId, true));
     }
     function release(): void {
       el.classList.remove("pressed");
-      Module._push_key_event(releaseCode);
+      hp48.push_key_event(buttonToKeyEvent(btnId, false));
     }
 
     el.addEventListener("mousedown", (e) => { e.preventDefault(); press(); });
@@ -159,55 +293,50 @@ function setupButtonInput(): void {
 // Keyboard input
 // ---------------------------------------------------------------------------
 
-/** Queue key events with delays so the emulator has time to scan the keyboard
- *  matrix between each event (needed for shift/alpha combos). */
 function pushKeySequence(events: number[], delay = 20): void {
   events.forEach((code, i) => {
     if (i === 0) {
-      Module._push_key_event(code);
+      hp48.push_key_event(code);
     } else {
-      setTimeout(() => Module._push_key_event(code), i * delay);
+      setTimeout(() => hp48.push_key_event(code), i * delay);
     }
   });
 }
 
 function setupKeyboardInput(): void {
   document.addEventListener("keydown", (e) => {
-    // Direct button mapping (numbers, operators, arrows, etc.)
     const btnId = KEY_MAP[e.key];
     if (btnId !== undefined) {
       if (pressedKeys.has(e.key)) return;
       pressedKeys.add(e.key);
       e.preventDefault();
-      Module._push_key_event(btnId + 1);
+      hp48.push_key_event(buttonToKeyEvent(btnId, true));
       return;
     }
 
-    // Shift + key combos: brackets, delimiters, special chars
     const shiftCombo = SHIFT_MAP[e.key];
     if (shiftCombo !== undefined) {
       if (e.repeat) return;
       e.preventDefault();
       const [shiftBtn, targetBtn] = shiftCombo;
       pushKeySequence([
-        shiftBtn + 1,       // shift press
-        targetBtn + 1,      // key press (shift held)
-        targetBtn + 101,    // key release
-        shiftBtn + 101,     // shift release
+        buttonToKeyEvent(shiftBtn, true),
+        buttonToKeyEvent(targetBtn, true),
+        buttonToKeyEvent(targetBtn, false),
+        buttonToKeyEvent(shiftBtn, false),
       ]);
       return;
     }
 
-    // Alpha characters: simulate ALPHA press/release then letter press/release
     const alphaBtn = ALPHA_MAP[e.key.toLowerCase()];
     if (alphaBtn !== undefined) {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       e.preventDefault();
       pushKeySequence([
-        ALPHA_BTN + 1,      // ALPHA press
-        alphaBtn + 1,       // letter press (ALPHA still held)
-        alphaBtn + 101,     // letter release
-        ALPHA_BTN + 101,    // ALPHA release
+        buttonToKeyEvent(ALPHA_BTN, true),
+        buttonToKeyEvent(alphaBtn, true),
+        buttonToKeyEvent(alphaBtn, false),
+        buttonToKeyEvent(ALPHA_BTN, false),
       ]);
       return;
     }
@@ -218,7 +347,7 @@ function setupKeyboardInput(): void {
     if (btnId === undefined) return;
     pressedKeys.delete(e.key);
     e.preventDefault();
-    Module._push_key_event(btnId + 101);
+    hp48.push_key_event(buttonToKeyEvent(btnId, false));
   });
 }
 
@@ -233,6 +362,7 @@ function showCalculator(): void {
 
 // ---------------------------------------------------------------------------
 // SVG Button Generation
+// (Identical to hp48.ts — pure DOM code, no emulator dependency)
 // ---------------------------------------------------------------------------
 
 interface ButtonDef {
@@ -253,14 +383,12 @@ const FONT_STACK = "'Helvetica Neue',Arial,Helvetica,sans-serif";
 const LS_COLOR = "#8B6BA0";
 const RS_COLOR = "#5AABB8";
 
-// Body gradient — darker than calculator body (#303848)
 const BODY_GRAD: [string, string] = ["#141c2c", "#2c3448"];
 
-// Body dimensions — B6/B5 tuned so right column edges align across row types
-const B6 = { x: 22, y: 33, w: 96,  h: 69, rx: 20 };   // 6-per-row (rows 1–4, viewBox 130×108)
-const B5 = { x: 18, y: 33, w: 126, h: 69, rx: 16 };   // 5-per-row (rows 5–8, viewBox 156×108)
-const BN = { x: 22, y: 33, w: 96,  h: 69, rx: 20 };   // narrow special keys (α, LS, RS, ON) — left-aligned with B6
-const BE = { x: 22, y: 33, w: 226, h: 69, rx: 20 };   // ENTER spans 2 B6 columns (260×108)
+const B6 = { x: 22, y: 33, w: 96,  h: 69, rx: 20 };
+const B5 = { x: 18, y: 33, w: 126, h: 69, rx: 16 };
+const BN = { x: 22, y: 33, w: 96,  h: 69, rx: 20 };
+const BE = { x: 22, y: 33, w: 226, h: 69, rx: 20 };
 
 const BUTTONS: ButtonDef[] = [
   // Row 0: Menu keys (btn 0–5) with alpha labels A–F
@@ -340,12 +468,10 @@ function svgText(
   return t;
 }
 
-// Map Unicode superscript chars to their regular equivalents
 const SUPER_MAP: Record<string, string> = {
-  "\u00B2": "2",   // ² → 2
-  "\u02E3": "x",   // ˣ → x
+  "\u00B2": "2",
+  "\u02E3": "x",
 };
-// Match superscripts, lowercase math variables, and radical sign
 const MATH_RE = /([\u00B2\u02E3\u221Axye])/;
 const ITALIC_VARS = new Set(["x", "y", "e"]);
 
@@ -396,7 +522,6 @@ function generateButtons(): void {
   }
 }
 
-// Buttons with light gray cell background: RS key + number keys 1–9
 const BG_BUTTONS = new Set([30,31,32, 35,36,37, 39,40,41,42]);
 
 function buildButton(btn: ButtonDef, idx: number, row: number): SVGSVGElement {
@@ -411,7 +536,6 @@ function buildButton(btn: ButtonDef, idx: number, row: number): SVGSVGElement {
     "data-btn": String(idx),
   }) as SVGSVGElement;
 
-  // Light gray cell background (dark body lines show through the margins)
   if (BG_BUTTONS.has(idx)) {
     svg.appendChild(svgEl("rect", {
       x: "2", y: "2", width: String(vw - 4), height: String(vh - 4),
@@ -428,37 +552,30 @@ function buildButton(btn: ButtonDef, idx: number, row: number): SVGSVGElement {
 }
 
 function buildMenuButton(svg: SVGSVGElement, btn: ButtonDef): void {
-  // Dark button body (frame + base) — from PNG: x=29,y=8,w≈104,h≈54
   svg.appendChild(svgEl("rect", {
     x: "26", y: "6", width: "104", height: "54",
     rx: "10", fill: "#203040", stroke: "#0a0e14", "stroke-width": "1",
   }));
-  // White face area (inset) — from PNG: inner white region
   svg.appendChild(svgEl("rect", {
     x: "38", y: "12", width: "80", height: "30",
     rx: "6", fill: "#E8ECE4",
   }));
-  // Alpha label (A–F) to the right of face
   if (btn.alpha) {
     const al = svgText(130, 54, btn.alpha, "#9a9a9a", "start", "bold", 22);
     al.setAttribute("font-stretch", "condensed");
-    svg.appendChild(al
-    );
+    svg.appendChild(al);
   }
 }
 
 function buildStdButton(
   svg: SVGSVGElement, btn: ButtonDef, idx: number, vw: number, row: number,
 ): void {
-  // Select body dimensions based on row type
   const bd = btn.wide ? BE : btn.narrow ? BN : row <= 4 ? B6 : B5;
   const { x: bx, y: by, w: bw, h: bh, rx } = bd;
   const isShift = !!btn.arrowDir;
-  // Shift keys always use dark body gradient; bodyColor is for the inset fill
   const [gt, gb] = isShift ? BODY_GRAD : (btn.bodyColor || BODY_GRAD);
   const gid = `bg${idx}`;
 
-  // Gradient definition
   const defs = svgEl("defs", {});
   const grad = svgEl("linearGradient", {
     id: gid, x1: "0", y1: "0", x2: "0", y2: "1",
@@ -468,17 +585,14 @@ function buildStdButton(
   defs.appendChild(grad);
   svg.appendChild(defs);
 
-  // Shift labels — centered above button body
   addShiftLabels(svg, btn, vw / 2, by);
 
-  // Drop shadow beneath button body
   svg.appendChild(svgEl("rect", {
     x: String(bx + 2), y: String(by + 3), width: String(bw), height: String(bh),
     rx: String(rx), fill: "rgba(0,0,0,0.5)",
     filter: "url(#bshadow)",
   }));
 
-  // Filters (reuse if already defined)
   if (!svg.querySelector("#bshadow")) {
     const sf = svgEl("filter", { id: "bshadow", x: "-15%", y: "-15%", width: "140%", height: "140%" });
     sf.appendChild(svgEl("feGaussianBlur", { stdDeviation: "2.5" }));
@@ -488,13 +602,11 @@ function buildStdButton(
     defs.appendChild(hf);
   }
 
-  // Button body (dark for all buttons)
   svg.appendChild(svgEl("rect", {
     x: String(bx), y: String(by), width: String(bw), height: String(bh),
     rx: String(rx), fill: `url(#${gid})`, stroke: "#0c1018", "stroke-width": "1.5",
   }));
 
-  // Shift keys: colored inset rect using global LS/RS colors
   if (isShift) {
     const inset = 7;
     const shiftCol = btn.arrowDir === "left" ? LS_COLOR : RS_COLOR;
@@ -505,14 +617,12 @@ function buildStdButton(
     }));
   }
 
-  // Top edge highlight (light catching the top bevel of button) — blurred
   svg.appendChild(svgEl("rect", {
     x: String(bx + 3), y: String(by + 1), width: String(bw - 6), height: String(bh / 2),
     rx: String(rx - 2), fill: "rgba(255,255,255,0.09)",
     filter: "url(#bhlite)",
   }));
 
-  // Bottom edge shadow (underside of button bevel) — blurred
   svg.appendChild(svgEl("line", {
     x1: String(bx + rx), y1: String(by + bh - 1.5),
     x2: String(bx + bw - rx), y2: String(by + bh - 1.5),
@@ -520,7 +630,6 @@ function buildStdButton(
     filter: "url(#bhlite)",
   }));
 
-  // Top highlight line on button face — blurred
   svg.appendChild(svgEl("line", {
     x1: String(bx + rx * 0.7), y1: String(by + 2.5),
     x2: String(bx + bw - rx * 0.7), y2: String(by + 2.5),
@@ -531,9 +640,7 @@ function buildStdButton(
   const cx = bx + bw / 2;
   const cy = by + bh / 2;
 
-  // Face: shift arrow or text
   if (btn.arrowDir) {
-    // Arrow gradient matching dark body (userSpaceOnUse for consistent mapping)
     const agid = `ag${idx}`;
     const agrad = svgEl("linearGradient", {
       id: agid, x1: "0", y1: String(by), x2: "0", y2: String(by + bh),
@@ -546,7 +653,6 @@ function buildStdButton(
   } else if (btn.face) {
     const fs = faceFontSize(btn.face, bw, !!btn.wide);
     if (btn.face === "\u2190") {
-      // Thick stumpy backspace arrow
       const x1 = bx + bw * 0.25, x2 = bx + bw * 0.50, x3 = bx + bw * 0.75;
       const y1 = by + bh * 0.25, y2 = by + bh * 0.375, y3 = by + bh * 0.5;
       const y4 = by + bh * 0.625, y5 = by + bh * 0.75;
@@ -555,7 +661,6 @@ function buildStdButton(
         fill: "#fff",
       }));
     } else if (btn.face.includes("\u221A")) {
-      // Radical with proper vinculum bar
       const radicand = btn.face.split("\u221A")[1] || "";
       drawRadical(svg, cx, cy, fs, radicand);
     } else if (MATH_RE.test(btn.face)) {
@@ -578,12 +683,10 @@ function buildStdButton(
     }
   }
 
-  // Alpha label — bottom-right corner of button body
   if (btn.alpha) {
     const al = svgText(bx + bw + 2, by + bh + 4, btn.alpha, "#9a9a9a", "start", "bold", 22);
     al.setAttribute("font-stretch", "condensed");
-    svg.appendChild(al
-    );
+    svg.appendChild(al);
   }
 }
 
@@ -604,9 +707,7 @@ function addShiftLabels(
   svg: SVGSVGElement, btn: ButtonDef, cx: number, bodyY: number,
 ): void {
   if (!btn.ls && !btn.rs) return;
-
   const labelY = bodyY - 6;
-
   const text = svgEl("text", {
     x: String(cx), y: String(labelY),
     "text-anchor": "middle",
@@ -622,7 +723,6 @@ function addShiftLabels(
   } else {
     appendStyledText(text, btn.rs!, 26, RS_COLOR);
   }
-
   svg.appendChild(text);
 }
 
@@ -634,19 +734,16 @@ function drawRadical(
   const barW = fontSize * 0.55;
   const totalW = radW + barW;
   const startX = cx - totalW / 2;
-
   const topY = cy - h * 0.45;
   const botY = cy + h * 0.15;
   const midY = cy + h * 0.05;
 
-  // Radical check + vinculum bar
   svg.appendChild(svgEl("path", {
     d: `M ${startX} ${midY} L ${startX + radW * 0.3} ${botY} L ${startX + radW} ${topY} H ${startX + totalW}`,
     fill: "none", stroke: "#fff", "stroke-width": "2.5",
     "stroke-linecap": "round", "stroke-linejoin": "round",
   }));
 
-  // Radicand text under the bar
   const t = svgEl("text", {
     x: String(startX + radW + barW / 2), y: String(cy),
     "text-anchor": "middle", "dominant-baseline": "central",
@@ -664,9 +761,8 @@ function drawShiftArrow(
   strokeRef: string,
 ): void {
   const cy = by + bh / 2;
-  const bot = by + bh - 5;      // account for stroke-linecap extending past endpoint
-  const r = 3;                  // very tight bend
-  // Tail at 25% from one side, arrowhead at 75% toward the other
+  const bot = by + bh - 5;
+  const r = 3;
   const tail = dir === "left" ? bx + bw * 0.75 : bx + bw * 0.25;
   const tip  = dir === "left" ? bx + bw * 0.25 : bx + bw * 0.75;
   const attrs = {
@@ -696,17 +792,7 @@ function drawShiftArrow(
 }
 
 // ---------------------------------------------------------------------------
-// Audio — instruction-count based frequency/duration analysis
-//
-// The emulator toggles OUT[2] bit 3 to produce sound.  The C side measures
-// half-period intervals in *instruction counts* (independent of emulation
-// speed) and computes:
-//   frequency = 4,000,000 / (2 * avg_half_period_instructions)
-//   duration  = total_instruction_span * 1000 / 4,000,000   (ms)
-//
-// JS polls these values, plays an OscillatorNode at the correct frequency,
-// and extends the tone to the correct wall-clock duration even if the
-// emulation ran faster than real-time.
+// Audio
 // ---------------------------------------------------------------------------
 
 const AUDIO_POLL_MS = 20;
@@ -718,15 +804,12 @@ let playing = false;
 
 function initAudioOnGesture(): void {
   if (audioCtx) return;
-
   try {
-    // Try webkitAudioContext for older WebKitGTK builds
     const AudioCtor = window.AudioContext
       ?? (window as unknown as Record<string, unknown>).webkitAudioContext as typeof AudioContext | undefined;
     if (!AudioCtor) { console.warn("hp48: no AudioContext support"); return; }
 
     audioCtx = new AudioCtor();
-    // Must resume synchronously inside user-gesture handler
     void audioCtx.resume();
 
     gainNode = audioCtx.createGain();
@@ -746,8 +829,7 @@ function initAudioOnGesture(): void {
 }
 
 function pollSpeaker(): void {
-  const freq = Module._get_speaker_frequency();
-
+  const freq = hp48.speaker_frequency();
   if (freq > 0) {
     oscillator!.frequency.value = freq;
     if (!playing) {
@@ -773,33 +855,93 @@ function setupAudio(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-save
+// Auto-save (IndexedDB)
 // ---------------------------------------------------------------------------
 
-function startAutoSave(): void {
-  setInterval(() => {
-    try { Module._web_save_state(); } catch { /* ignore */ }
-  }, AUTO_SAVE_INTERVAL_MS);
+async function saveToIDB(): Promise<void> {
+  try {
+    const state = hp48.save_state();
+    const ram = hp48.save_ram();
+    await dbPut("state", state);
+    await dbPut("ram", ram);
+    console.log(`[hp48] saved to IDB: state=${state.byteLength}B, ram=${ram.byteLength}B`);
+  } catch (e) { console.warn("[hp48] save failed", e); }
+}
 
-  window.addEventListener("beforeunload", () => {
-    try { Module._web_save_state(); } catch { /* ignore */ }
-  });
+function startAutoSave(): void {
+  setInterval(saveToIDB, AUTO_SAVE_INTERVAL_MS);
+  window.addEventListener("beforeunload", () => { void saveToIDB(); });
 }
 
 // ---------------------------------------------------------------------------
-// Bootstrap — set Module global before hp48_emu.js loads
+// Emulation loop
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Emscripten expects a global Module
-(window as any).Module = {
-  onRuntimeInitialized(): void {
-    console.log("HP-48 Emscripten runtime initialized");
-    generateButtons();
-    startDisplayLoop();
-    setupButtonInput();
-    setupKeyboardInput();
-    setupAudio();
-    showCalculator();
-    startAutoSave();
-  },
-};
+function startEmulationLoop(): void {
+  let lastTime = performance.now();
+
+  function frame(now: number): void {
+    const elapsed = now - lastTime;
+    lastTime = now;
+    hp48.run_frame(elapsed, now / 1000.0);
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+}
+
+// ---------------------------------------------------------------------------
+// Asset fetching helper
+// ---------------------------------------------------------------------------
+
+async function fetchAsset(name: string): Promise<Uint8Array> {
+  const resp = await fetch(`./assets/${name}`);
+  if (!resp.ok) throw new Error(`Failed to fetch assets/${name}: ${resp.status}`);
+  return new Uint8Array(await resp.arrayBuffer());
+}
+
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+
+async function main(): Promise<void> {
+  const wasm = await init();
+  wasmMemory = wasm.memory;
+
+  // Load ROM from assets/ (same files the C/Emscripten path uses)
+  const rom = await fetchAsset("rom");
+
+  // RAM and state: try IndexedDB first (saved from previous Rust session),
+  // fall back to bundled assets/
+  let ram = await dbGet("ram") ?? null;
+  if (ram) {
+    console.log(`[hp48] loaded RAM from IDB: ${ram.byteLength} bytes`);
+  } else {
+    try { ram = await fetchAsset("ram"); console.log(`[hp48] loaded RAM from assets: ${ram.byteLength} bytes`); } catch { console.log("[hp48] no RAM found, starting fresh"); }
+  }
+  let state = await dbGet("state") ?? null;
+  if (state) {
+    console.log(`[hp48] loaded state from IDB: ${state.byteLength} bytes`);
+  } else {
+    try { state = await fetchAsset("hp48"); console.log(`[hp48] loaded state from assets: ${state.byteLength} bytes`); } catch { console.log("[hp48] no state found, starting fresh"); }
+  }
+
+  hp48 = new Hp48(rom, ram, state);
+  // C set_accesstime() uses local time (gettimeofday - timezone offset).
+  // Date.now() is UTC ms; subtract timezone offset to get local epoch seconds.
+  const localEpochSecs = Date.now() / 1000 - new Date().getTimezoneOffset() * 60;
+  hp48.start(performance.now() / 1000.0, localEpochSecs);
+
+  generateButtons();
+  startDisplayLoop();
+  setupButtonInput();
+  setupKeyboardInput();
+  setupAudio();
+  showCalculator();
+  startEmulationLoop();
+  startAutoSave();
+
+  console.log("HP-48 Rust WASM emulator initialized");
+}
+
+main().catch((e) => console.error("hp48_rust: init failed", e));

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>HP-48 GX Emulator (Rust)</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="calculator">
+
+  <!-- Display -->
+  <div id="display-area">
+    <div id="display-wrapper">
+      <canvas id="annunciators"></canvas>
+      <canvas id="lcd"></canvas>
+      <div id="loading">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buttons (populated by generateButtons() in hp48_rust.ts) -->
+  <div id="buttons">
+    <div class="btn-row menu-row"></div>
+    <div class="btn-row"></div>
+    <div class="btn-row"></div>
+    <div class="btn-row"></div>
+    <div class="btn-row"></div>
+    <div class="btn-row"></div>
+    <div class="btn-row"></div>
+    <div class="btn-row"></div>
+    <div class="btn-row"></div>
+  </div>
+
+</div>
+
+<script type="module" src="hp48_rust.js"></script>
+
+</body>
+</html>

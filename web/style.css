@@ -50,6 +50,20 @@ body {
   position: relative;
 }
 
+/* Lighter upper panel (display + menu row area) */
+#calculator::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 37%;
+  border-radius: 12px 12px 0 0;
+  background: rgb(80, 88, 100);
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* Plastic noise texture overlay */
 #calculator::before {
   content: "";
@@ -92,8 +106,8 @@ body {
       rgba(0,0,0,0.20) 290deg,
       rgba(0,0,0,0.30) 360deg
     ),
-    /* Base: calculator body color */
-    rgb(48, 56, 72);
+    /* Base: matches lighter upper panel color */
+    rgb(80, 88, 100);
   box-shadow:
     /* Sharp depth from top */
     inset 0 1px 0 rgba(0,0,0,0.20),
@@ -119,12 +133,22 @@ body {
   position: relative;
 }
 
+#annunciators {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #BCC4A5;
+  border-radius: 2px 2px 0 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 #lcd {
   display: block;
   width: 100%;
   height: auto;
   background: #BCC4A5;
-  border-radius: 2px;
+  border-radius: 0 0 2px 2px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
