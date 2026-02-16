@@ -644,6 +644,8 @@ function startDisplayLoop() {
   if (annCanvas) {
     annCanvas.width = ANN_CANVAS_W;
     annCanvas.height = ANN_CANVAS_H;
+    annCanvas.style.width = "100%";
+    annCanvas.style.height = "auto";
     annCtx = annCanvas.getContext("2d");
     annImageData = annCtx.createImageData(ANN_CANVAS_W, ANN_CANVAS_H);
     for (let i = 0; i < ANN_CANVAS_W * ANN_CANVAS_H; i++) {
@@ -1289,6 +1291,13 @@ function startAutoSave() {
   window.addEventListener("beforeunload", () => {
     void saveToIDB();
   });
+  window.addEventListener("pagehide", () => {
+    void saveToIDB();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") void saveToIDB();
+  });
+  setTimeout(saveToIDB, 5e3);
 }
 function startEmulationLoop() {
   let lastTime = performance.now();

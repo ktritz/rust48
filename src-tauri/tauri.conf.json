@@ -9,6 +9,7 @@
   "app": {
     "windows": [
       {
+        "url": "rust.html",
         "title": "HP-48 GX",
         "width": 564,
         "height": 950,

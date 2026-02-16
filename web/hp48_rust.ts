@@ -136,7 +136,7 @@ let wasmMemory: WebAssembly.Memory;
 
 const ANN_WIDTH = 15;
 const ANN_HEIGHT = 12;
-const ANN_CANVAS_W = 262; // matches C 2x-scale display width
+const ANN_CANVAS_W = 262; // 2× LCD resolution for crisp annunciator icons
 const ANN_CANVAS_H = 12;
 
 // Pixel colors matching the LCD
@@ -190,13 +190,16 @@ function startDisplayLoop(): void {
   const ctx = canvas.getContext("2d")!;
   const imageData = ctx.createImageData(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
-  // Annunciator canvas — 262×12 matching C 2x-scale header dimensions
+  // Annunciator canvas — 2× LCD resolution for crisp icons
   const annCanvas = document.getElementById("annunciators") as HTMLCanvasElement | null;
   let annCtx: CanvasRenderingContext2D | null = null;
   let annImageData: ImageData | null = null;
   if (annCanvas) {
     annCanvas.width = ANN_CANVAS_W;
     annCanvas.height = ANN_CANVAS_H;
+    // Force CSS sizing — WebView2 ignores stylesheet width:100% on canvas
+    annCanvas.style.width = "100%";
+    annCanvas.style.height = "auto";
     annCtx = annCanvas.getContext("2d")!;
     annImageData = annCtx.createImageData(ANN_CANVAS_W, ANN_CANVAS_H);
     // Fill with LCD off color
@@ -870,7 +873,14 @@ async function saveToIDB(): Promise<void> {
 
 function startAutoSave(): void {
   setInterval(saveToIDB, AUTO_SAVE_INTERVAL_MS);
+  // Save on page close — multiple events for Tauri/WebView2 reliability
   window.addEventListener("beforeunload", () => { void saveToIDB(); });
+  window.addEventListener("pagehide", () => { void saveToIDB(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") void saveToIDB();
+  });
+  // Save once shortly after boot so closing within 30s doesn't lose state
+  setTimeout(saveToIDB, 5_000);
 }
 
 // ---------------------------------------------------------------------------

@@ -6,10 +6,25 @@
   <title>HP-48 GX Emulator (Rust)</title>
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Physical div replacing ::after for WebView2 compatibility */
+    #upper-panel {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 37%;
+      border-radius: 12px 12px 0 0;
+      background: rgb(80, 88, 100);
+      pointer-events: none;
+      z-index: 0;
+    }
+  </style>
 </head>
 <body>
 
 <div id="calculator">
+
+  <!-- Light upper panel — physical div for WebView2 compatibility -->
+  <div id="upper-panel"></div>
 
   <!-- Display -->
   <div id="display-area">

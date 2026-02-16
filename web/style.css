@@ -131,14 +131,15 @@ body {
 
 #display-wrapper {
   position: relative;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #BCC4A5;
 }
 
 #annunciators {
   display: block;
   width: 100%;
   height: auto;
-  background: #BCC4A5;
-  border-radius: 2px 2px 0 0;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
@@ -147,8 +148,6 @@ body {
   display: block;
   width: 100%;
   height: auto;
-  background: #BCC4A5;
-  border-radius: 0 0 2px 2px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
