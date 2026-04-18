@@ -359,6 +359,7 @@ function setupKeyboardInput(): void {
 // ---------------------------------------------------------------------------
 
 function showCalculator(): void {
+  document.getElementById("calculator")?.classList.add("ready");
   const loading = document.getElementById("loading");
   if (loading) loading.style.display = "none";
 }

@@ -15,6 +15,8 @@ function createWindow() {
     width: 564,
     height: 950,
     title: 'HP-48 GX',
+    show: false,
+    backgroundColor: '#1a1a2e',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -22,6 +24,7 @@ function createWindow() {
     },
   });
   win.setMenuBarVisibility(false);
+  win.once('ready-to-show', () => win.show());
   win.loadURL('app://rust48/rust.html');
   if (process.env.ELECTRON_DEV) win.webContents.openDevTools();
 }
