@@ -2,10 +2,12 @@
   "name": "rust48-electron",
   "version": "0.1.0",
   "description": "HP-48 GX emulator Electron shell",
+  "author": "ktritz",
   "main": "main.js",
   "build": {
     "appId": "com.rust48.app",
     "productName": "rust48",
+    "electronVersion": "33.4.11",
     "directories": {
       "output": "../target/electron"
     },

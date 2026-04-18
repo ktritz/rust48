@@ -16,7 +16,7 @@
   "scripts": {
     "tauri": "tauri",
     "electron:dev": "ELECTRON_DEV=1 electron src-electron/main.js",
-    "electron:build": "electron-builder --config src-electron/package.json --projectDir src-electron",
+    "electron:build": "electron-builder --projectDir src-electron",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
