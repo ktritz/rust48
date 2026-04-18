@@ -36,6 +36,10 @@ pub struct Emulator {
     pub interrupt_called: bool,
     pub is_shutdown: bool,
     pub first_press: bool,
+    pub diag_run_frame_count: u32,
+    pub diag_shutdown_check_count: u32,
+    pub diag_process_events_calls: u32,
+    pub diag_process_events_true: u32,
     pub now: f64, // current time in seconds, updated each frame
 
     // Speaker throttle: snapshot of speaker_counter from previous frame
@@ -138,6 +142,10 @@ impl Emulator {
             interrupt_called: false,
             is_shutdown: false,
             first_press: true,
+            diag_run_frame_count: 0,
+            diag_shutdown_check_count: 0,
+            diag_process_events_calls: 0,
+            diag_process_events_true: 0,
             last_speaker_counter: 0,
             now: 0.0,
             epoch_offset: 0.0,
@@ -593,6 +601,7 @@ impl Emulator {
     }
 
     pub fn do_shutdown_check(&mut self, now: f64) {
+        self.diag_shutdown_check_count += 1;
         let mut wake = false;
 
         if self.got_alarm {
@@ -971,6 +980,7 @@ impl Emulator {
     // -----------------------------------------------------------------------
 
     pub fn run_frame(&mut self, elapsed_ms: f64, now: f64) {
+        self.diag_run_frame_count += 1;
         self.now = now;
 
         // Cap elapsed time to avoid huge bursts after tab switch

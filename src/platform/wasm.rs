@@ -105,8 +105,10 @@ impl Hp48 {
             .filter(|(_, v)| **v != 0)
             .map(|(i, v)| format!("r{}=0x{:04x}", i, *v as u16))
             .collect();
-        format!("kbd_ien={} is_shutdown={} queue_len={} keybuf=[{}] pc=0x{:05x}",
-            kbd_ien, is_shutdown, queue_len, nonzero_rows.join(","), self.emu.saturn.pc)
+        format!("kbd_ien={} is_shutdown={} queue_len={} keybuf=[{}] pc=0x{:05x} frames={} shutdown_checks={} pe_calls={}/{}",
+            kbd_ien, is_shutdown, queue_len, nonzero_rows.join(","), self.emu.saturn.pc,
+            self.emu.diag_run_frame_count, self.emu.diag_shutdown_check_count,
+            self.emu.keyboard.diag_nonempty_calls, self.emu.keyboard.diag_calls)
     }
 }
 
