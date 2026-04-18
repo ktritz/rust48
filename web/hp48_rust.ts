@@ -268,24 +268,30 @@ function setupButtonInput(): void {
     const btnId = parseInt(el.dataset.btn!, 10);
     if (isNaN(btnId)) return;
 
-    function press(): void {
+    function press(src: string): void {
+      console.log(`[DIAG] btn press  t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
       el.classList.add("pressed");
-      hp48.push_key_event(buttonToKeyEvent(btnId, true));
+      const code = buttonToKeyEvent(btnId, true);
+      console.log(`[DIAG]   push_key_event(press, code=0x${code.toString(16)})`);
+      hp48.push_key_event(code);
     }
-    function release(): void {
+    function release(src: string): void {
+      console.log(`[DIAG] btn release t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
       el.classList.remove("pressed");
-      hp48.push_key_event(buttonToKeyEvent(btnId, false));
+      const code = buttonToKeyEvent(btnId, false);
+      console.log(`[DIAG]   push_key_event(release, code=0x${code.toString(16)})`);
+      hp48.push_key_event(code);
     }
 
-    el.addEventListener("mousedown", (e) => { e.preventDefault(); press(); });
-    el.addEventListener("mouseup", () => { release(); });
+    el.addEventListener("mousedown", (e) => { e.preventDefault(); press("mousedown"); });
+    el.addEventListener("mouseup", () => { release("mouseup"); });
     el.addEventListener("mouseleave", () => {
-      if (el.classList.contains("pressed")) release();
+      if (el.classList.contains("pressed")) release("mouseleave");
     });
 
-    el.addEventListener("touchstart", (e) => { e.preventDefault(); press(); }, { passive: false });
-    el.addEventListener("touchend", (e) => { e.preventDefault(); release(); }, { passive: false });
-    el.addEventListener("touchcancel", (e) => { e.preventDefault(); release(); }, { passive: false });
+    el.addEventListener("touchstart", (e) => { e.preventDefault(); press("touchstart"); }, { passive: false });
+    el.addEventListener("touchend", (e) => { e.preventDefault(); release("touchend"); }, { passive: false });
+    el.addEventListener("touchcancel", (e) => { e.preventDefault(); release("touchcancel"); }, { passive: false });
   });
 
   document.getElementById("buttons")
@@ -847,7 +853,8 @@ function pollSpeaker(): void {
 }
 
 function setupAudio(): void {
-  const handler = (): void => {
+  const handler = (e: Event): void => {
+    console.log(`[DIAG] audio unlock  t=${performance.now().toFixed(1)} type=${e.type} target=${(e.target as HTMLElement)?.id || (e.target as HTMLElement)?.tagName}`);
     initAudioOnGesture();
     document.removeEventListener("mousedown", handler);
     document.removeEventListener("touchstart", handler);
@@ -890,10 +897,17 @@ function startAutoSave(): void {
 
 function startEmulationLoop(): void {
   let lastTime = performance.now();
+  let frameCount = 0;
+
+  console.log(`[DIAG] startEmulationLoop t=${performance.now().toFixed(1)}`);
 
   function frame(now: number): void {
     const elapsed = now - lastTime;
     lastTime = now;
+    if (frameCount < 5) {
+      console.log(`[DIAG] frame #${frameCount} t=${now.toFixed(1)} elapsed=${elapsed.toFixed(1)}`);
+    }
+    frameCount++;
     hp48.run_frame(elapsed, now / 1000.0);
     requestAnimationFrame(frame);
   }
