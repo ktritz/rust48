@@ -270,17 +270,19 @@ function setupButtonInput(): void {
 
     function press(src: string): void {
       console.log(`[DIAG] btn press  t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
+      console.log(`[DIAG]   pre  ${hp48.diag()}`);
       el.classList.add("pressed");
       const code = buttonToKeyEvent(btnId, true);
-      console.log(`[DIAG]   push_key_event(press, code=0x${code.toString(16)})`);
       hp48.push_key_event(code);
+      console.log(`[DIAG]   post ${hp48.diag()}`);
     }
     function release(src: string): void {
       console.log(`[DIAG] btn release t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
+      console.log(`[DIAG]   pre  ${hp48.diag()}`);
       el.classList.remove("pressed");
       const code = buttonToKeyEvent(btnId, false);
-      console.log(`[DIAG]   push_key_event(release, code=0x${code.toString(16)})`);
       hp48.push_key_event(code);
+      console.log(`[DIAG]   post ${hp48.diag()}`);
     }
 
     el.addEventListener("mousedown", (e) => { e.preventDefault(); press("mousedown"); });
@@ -904,11 +906,15 @@ function startEmulationLoop(): void {
   function frame(now: number): void {
     const elapsed = now - lastTime;
     lastTime = now;
-    if (frameCount < 5) {
-      console.log(`[DIAG] frame #${frameCount} t=${now.toFixed(1)} elapsed=${elapsed.toFixed(1)}`);
+    const log = frameCount < 5;
+    if (log) {
+      console.log(`[DIAG] frame #${frameCount} t=${now.toFixed(1)} elapsed=${elapsed.toFixed(1)} pre=${hp48.diag()}`);
     }
     frameCount++;
     hp48.run_frame(elapsed, now / 1000.0);
+    if (log) {
+      console.log(`[DIAG]   post-frame #${frameCount - 1} ${hp48.diag()}`);
+    }
     requestAnimationFrame(frame);
   }
 
@@ -952,6 +958,7 @@ async function main(): Promise<void> {
   }
 
   hp48 = new Hp48(rom, ram, state);
+  console.log(`[DIAG] after Hp48 construction ${hp48.diag()}`);
   // C set_accesstime() uses local time (gettimeofday - timezone offset).
   // Date.now() is UTC ms; subtract timezone offset to get local epoch seconds.
   const localEpochSecs = Date.now() / 1000 - new Date().getTimezoneOffset() * 60;
