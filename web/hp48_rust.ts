@@ -268,32 +268,24 @@ function setupButtonInput(): void {
     const btnId = parseInt(el.dataset.btn!, 10);
     if (isNaN(btnId)) return;
 
-    function press(src: string): void {
-      console.log(`[DIAG] btn press  t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
-      console.log(`[DIAG]   pre  ${hp48.diag()}`);
+    function press(): void {
       el.classList.add("pressed");
-      const code = buttonToKeyEvent(btnId, true);
-      hp48.push_key_event(code);
-      console.log(`[DIAG]   post ${hp48.diag()}`);
+      hp48.push_key_event(buttonToKeyEvent(btnId, true));
     }
-    function release(src: string): void {
-      console.log(`[DIAG] btn release t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
-      console.log(`[DIAG]   pre  ${hp48.diag()}`);
+    function release(): void {
       el.classList.remove("pressed");
-      const code = buttonToKeyEvent(btnId, false);
-      hp48.push_key_event(code);
-      console.log(`[DIAG]   post ${hp48.diag()}`);
+      hp48.push_key_event(buttonToKeyEvent(btnId, false));
     }
 
-    el.addEventListener("mousedown", (e) => { e.preventDefault(); press("mousedown"); });
-    el.addEventListener("mouseup", () => { release("mouseup"); });
+    el.addEventListener("mousedown", (e) => { e.preventDefault(); press(); });
+    el.addEventListener("mouseup", () => { release(); });
     el.addEventListener("mouseleave", () => {
-      if (el.classList.contains("pressed")) release("mouseleave");
+      if (el.classList.contains("pressed")) release();
     });
 
-    el.addEventListener("touchstart", (e) => { e.preventDefault(); press("touchstart"); }, { passive: false });
-    el.addEventListener("touchend", (e) => { e.preventDefault(); release("touchend"); }, { passive: false });
-    el.addEventListener("touchcancel", (e) => { e.preventDefault(); release("touchcancel"); }, { passive: false });
+    el.addEventListener("touchstart", (e) => { e.preventDefault(); press(); }, { passive: false });
+    el.addEventListener("touchend", (e) => { e.preventDefault(); release(); }, { passive: false });
+    el.addEventListener("touchcancel", (e) => { e.preventDefault(); release(); }, { passive: false });
   });
 
   document.getElementById("buttons")
@@ -860,8 +852,7 @@ function pollSpeaker(): void {
 }
 
 function setupAudioUnlock(): void {
-  const handler = (e: Event): void => {
-    console.log(`[DIAG] audio unlock  t=${performance.now().toFixed(1)} type=${e.type} target=${(e.target as HTMLElement)?.id || (e.target as HTMLElement)?.tagName}`);
+  const handler = (): void => {
     if (audioCtx) void audioCtx.resume();
     document.removeEventListener("mousedown", handler);
     document.removeEventListener("touchstart", handler);
@@ -904,22 +895,11 @@ function startAutoSave(): void {
 
 function startEmulationLoop(): void {
   let lastTime = performance.now();
-  let frameCount = 0;
-
-  console.log(`[DIAG] startEmulationLoop t=${performance.now().toFixed(1)}`);
 
   function frame(now: number): void {
     const elapsed = now - lastTime;
     lastTime = now;
-    const log = frameCount < 5;
-    if (log) {
-      console.log(`[DIAG] frame #${frameCount} t=${now.toFixed(1)} elapsed=${elapsed.toFixed(1)} pre=${hp48.diag()}`);
-    }
-    frameCount++;
     hp48.run_frame(elapsed, now / 1000.0);
-    if (log) {
-      console.log(`[DIAG]   post-frame #${frameCount - 1} ${hp48.diag()}`);
-    }
     requestAnimationFrame(frame);
   }
 
@@ -963,7 +943,6 @@ async function main(): Promise<void> {
   }
 
   hp48 = new Hp48(rom, ram, state);
-  console.log(`[DIAG] after Hp48 construction ${hp48.diag()}`);
   // C set_accesstime() uses local time (gettimeofday - timezone offset).
   // Date.now() is UTC ms; subtract timezone offset to get local epoch seconds.
   const localEpochSecs = Date.now() / 1000 - new Date().getTimezoneOffset() * 60;

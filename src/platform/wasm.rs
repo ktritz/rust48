@@ -94,22 +94,6 @@ impl Hp48 {
     pub fn run_frame(&mut self, elapsed_ms: f64, now_secs: f64) {
         self.emu.run_frame(elapsed_ms, now_secs);
     }
-
-    /// Diagnostic snapshot: kbd_ien | is_shutdown | queue_len | keybuf_rows_nonzero
-    pub fn diag(&self) -> String {
-        let kbd_ien = self.emu.saturn.kbd_ien;
-        let is_shutdown = self.emu.is_shutdown;
-        let queue_len = self.emu.keyboard.event_queue.len();
-        let nonzero_rows: Vec<String> = self.emu.saturn.keybuf.rows.iter()
-            .enumerate()
-            .filter(|(_, v)| **v != 0)
-            .map(|(i, v)| format!("r{}=0x{:04x}", i, *v as u16))
-            .collect();
-        format!("kbd_ien={} is_shutdown={} queue_len={} keybuf=[{}] pc=0x{:05x} frames={} shutdown_checks={} pe_calls={}/{}",
-            kbd_ien, is_shutdown, queue_len, nonzero_rows.join(","), self.emu.saturn.pc,
-            self.emu.diag_run_frame_count, self.emu.diag_shutdown_check_count,
-            self.emu.keyboard.diag_nonempty_calls, self.emu.keyboard.diag_calls)
-    }
 }
 
 /// Packed ROM size threshold for SX model detection

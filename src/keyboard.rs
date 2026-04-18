@@ -5,16 +5,12 @@ use crate::cpu::Saturn;
 
 pub struct Keyboard {
     pub event_queue: Vec<u32>,
-    pub diag_calls: u32,
-    pub diag_nonempty_calls: u32,
 }
 
 impl Keyboard {
     pub fn new() -> Self {
         Self {
             event_queue: Vec::new(),
-            diag_calls: 0,
-            diag_nonempty_calls: 0,
         }
     }
 
@@ -29,11 +25,9 @@ impl Keyboard {
     /// Returns true if any event was processed AND a keyboard interrupt
     /// should be triggered (i.e., a new key was pressed).
     pub fn process_events(&mut self, saturn: &mut Saturn) -> bool {
-        self.diag_calls += 1;
         if self.event_queue.is_empty() {
             return false;
         }
-        self.diag_nonempty_calls += 1;
         let mut need_kbd_int = false;
 
         // Process all queued events (drain in FIFO order)

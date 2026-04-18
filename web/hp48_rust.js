@@ -22,26 +22,6 @@ var Hp48 = class {
     wasm.hp48_clear_display_dirty(this.__wbg_ptr);
   }
   /**
-   * Diagnostic snapshot: kbd_ien | is_shutdown | queue_len | keybuf_rows_nonzero
-   * @returns {string}
-   */
-  diag() {
-    let deferred1_0;
-    let deferred1_1;
-    try {
-      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-      wasm.hp48_diag(retptr, this.__wbg_ptr);
-      var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-      var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-      deferred1_0 = r0;
-      deferred1_1 = r1;
-      return getStringFromWasm0(r0, r1);
-    } finally {
-      wasm.__wbindgen_add_to_stack_pointer(16);
-      wasm.__wbindgen_export(deferred1_0, deferred1_1, 1);
-    }
-  }
-  /**
    * Get pointer to the RGBA display buffer (for use with WASM memory).
    * @returns {number}
    */
@@ -80,11 +60,11 @@ var Hp48 = class {
    * @param {Uint8Array | null} [state]
    */
   constructor(rom, ram, state) {
-    const ptr0 = passArray8ToWasm0(rom, wasm.__wbindgen_export2);
+    const ptr0 = passArray8ToWasm0(rom, wasm.__wbindgen_export);
     const len0 = WASM_VECTOR_LEN;
-    var ptr1 = isLikeNone(ram) ? 0 : passArray8ToWasm0(ram, wasm.__wbindgen_export2);
+    var ptr1 = isLikeNone(ram) ? 0 : passArray8ToWasm0(ram, wasm.__wbindgen_export);
     var len1 = WASM_VECTOR_LEN;
-    var ptr2 = isLikeNone(state) ? 0 : passArray8ToWasm0(state, wasm.__wbindgen_export2);
+    var ptr2 = isLikeNone(state) ? 0 : passArray8ToWasm0(state, wasm.__wbindgen_export);
     var len2 = WASM_VECTOR_LEN;
     const ret = wasm.hp48_new(ptr0, len0, ptr1, len1, ptr2, len2);
     this.__wbg_ptr = ret >>> 0;
@@ -121,7 +101,7 @@ var Hp48 = class {
       var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
       var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
       var v1 = getArrayU8FromWasm0(r0, r1).slice();
-      wasm.__wbindgen_export(r0, r1 * 1, 1);
+      wasm.__wbindgen_export2(r0, r1 * 1, 1);
       return v1;
     } finally {
       wasm.__wbindgen_add_to_stack_pointer(16);
@@ -138,7 +118,7 @@ var Hp48 = class {
       var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
       var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
       var v1 = getArrayU8FromWasm0(r0, r1).slice();
-      wasm.__wbindgen_export(r0, r1 * 1, 1);
+      wasm.__wbindgen_export2(r0, r1 * 1, 1);
       return v1;
     } finally {
       wasm.__wbindgen_add_to_stack_pointer(16);
@@ -719,43 +699,35 @@ function setupButtonInput() {
   buttons.forEach((el) => {
     const btnId = parseInt(el.dataset.btn, 10);
     if (isNaN(btnId)) return;
-    function press(src) {
-      console.log(`[DIAG] btn press  t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
-      console.log(`[DIAG]   pre  ${hp48.diag()}`);
+    function press() {
       el.classList.add("pressed");
-      const code = buttonToKeyEvent(btnId, true);
-      hp48.push_key_event(code);
-      console.log(`[DIAG]   post ${hp48.diag()}`);
+      hp48.push_key_event(buttonToKeyEvent(btnId, true));
     }
-    function release(src) {
-      console.log(`[DIAG] btn release t=${performance.now().toFixed(1)} id=${btnId} src=${src}`);
-      console.log(`[DIAG]   pre  ${hp48.diag()}`);
+    function release() {
       el.classList.remove("pressed");
-      const code = buttonToKeyEvent(btnId, false);
-      hp48.push_key_event(code);
-      console.log(`[DIAG]   post ${hp48.diag()}`);
+      hp48.push_key_event(buttonToKeyEvent(btnId, false));
     }
     el.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      press("mousedown");
+      press();
     });
     el.addEventListener("mouseup", () => {
-      release("mouseup");
+      release();
     });
     el.addEventListener("mouseleave", () => {
-      if (el.classList.contains("pressed")) release("mouseleave");
+      if (el.classList.contains("pressed")) release();
     });
     el.addEventListener("touchstart", (e) => {
       e.preventDefault();
-      press("touchstart");
+      press();
     }, { passive: false });
     el.addEventListener("touchend", (e) => {
       e.preventDefault();
-      release("touchend");
+      release();
     }, { passive: false });
     el.addEventListener("touchcancel", (e) => {
       e.preventDefault();
-      release("touchcancel");
+      release();
     }, { passive: false });
   });
   document.getElementById("buttons")?.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -1293,8 +1265,7 @@ function pollSpeaker() {
   }
 }
 function setupAudioUnlock() {
-  const handler = (e) => {
-    console.log(`[DIAG] audio unlock  t=${performance.now().toFixed(1)} type=${e.type} target=${e.target?.id || e.target?.tagName}`);
+  const handler = () => {
     if (audioCtx) void audioCtx.resume();
     document.removeEventListener("mousedown", handler);
     document.removeEventListener("touchstart", handler);
@@ -1330,20 +1301,10 @@ function startAutoSave() {
 }
 function startEmulationLoop() {
   let lastTime = performance.now();
-  let frameCount = 0;
-  console.log(`[DIAG] startEmulationLoop t=${performance.now().toFixed(1)}`);
   function frame(now) {
     const elapsed = now - lastTime;
     lastTime = now;
-    const log = frameCount < 5;
-    if (log) {
-      console.log(`[DIAG] frame #${frameCount} t=${now.toFixed(1)} elapsed=${elapsed.toFixed(1)} pre=${hp48.diag()}`);
-    }
-    frameCount++;
     hp48.run_frame(elapsed, now / 1e3);
-    if (log) {
-      console.log(`[DIAG]   post-frame #${frameCount - 1} ${hp48.diag()}`);
-    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -1380,7 +1341,6 @@ async function main() {
     }
   }
   hp48 = new Hp48(rom, ram, state);
-  console.log(`[DIAG] after Hp48 construction ${hp48.diag()}`);
   const localEpochSecs = Date.now() / 1e3 - (/* @__PURE__ */ new Date()).getTimezoneOffset() * 60;
   hp48.start(performance.now() / 1e3, localEpochSecs);
   generateButtons();
