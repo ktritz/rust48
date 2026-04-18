@@ -15,7 +15,7 @@
   "main": "index.js",
   "scripts": {
     "tauri": "tauri",
-    "tauri:portable": "tauri build --bundles none",
+    "tauri:portable": "tauri build --no-bundle",
     "electron:dev": "ELECTRON_DEV=1 electron src-electron/main.js",
     "electron:build": "electron-builder --projectDir src-electron",
     "test": "echo \"Error: no test specified\" && exit 1"
