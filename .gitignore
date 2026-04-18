@@ -13,6 +13,9 @@ web/hp48.js
 src-tauri/target/
 src-tauri/gen/
 
+# Build artifacts - Electron
+target/
+
 # Reference images (not used in build)
 web/img/
 

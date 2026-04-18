@@ -3,6 +3,8 @@
     "@eslint/js": "^9.39.2",
     "@tauri-apps/cli": "^2",
     "binaryen": "^125.0.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.0.0",
     "esbuild": "^0.27.3",
     "eslint": "^9.39.2",
     "typescript": "^5.9.3",
@@ -13,6 +15,8 @@
   "main": "index.js",
   "scripts": {
     "tauri": "tauri",
+    "electron:dev": "ELECTRON_DEV=1 electron src-electron/main.js",
+    "electron:build": "electron-builder --config src-electron/package.json --projectDir src-electron",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

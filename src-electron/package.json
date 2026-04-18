@@ -1,0 +1,28 @@
+{
+  "name": "rust48-electron",
+  "version": "0.1.0",
+  "description": "HP-48 GX emulator Electron shell",
+  "main": "main.js",
+  "build": {
+    "appId": "com.rust48.app",
+    "productName": "rust48",
+    "directories": {
+      "output": "../target/electron"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "!node_modules"
+    ],
+    "extraResources": [
+      {
+        "from": "../web",
+        "to": "web",
+        "filter": ["**/*"]
+      }
+    ],
+    "linux": { "target": ["AppImage"], "icon": "../src-tauri/icons/icon.png" },
+    "mac": { "target": ["dmg"], "icon": "../src-tauri/icons/icon.png" },
+    "win": { "target": ["nsis"], "icon": "../src-tauri/icons/icon.ico" }
+  }
+}
