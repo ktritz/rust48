@@ -1257,7 +1257,7 @@ var audioCtx = null;
 var oscillator = null;
 var gainNode = null;
 var playing = false;
-function initAudioOnGesture() {
+function initAudioEarly() {
   if (audioCtx) return;
   try {
     const AudioCtor = window.AudioContext ?? window.webkitAudioContext;
@@ -1266,7 +1266,6 @@ function initAudioOnGesture() {
       return;
     }
     audioCtx = new AudioCtor();
-    void audioCtx.resume();
     gainNode = audioCtx.createGain();
     gainNode.gain.value = 0;
     gainNode.connect(audioCtx.destination);
@@ -1293,10 +1292,10 @@ function pollSpeaker() {
     playing = false;
   }
 }
-function setupAudio() {
+function setupAudioUnlock() {
   const handler = (e) => {
     console.log(`[DIAG] audio unlock  t=${performance.now().toFixed(1)} type=${e.type} target=${e.target?.id || e.target?.tagName}`);
-    initAudioOnGesture();
+    if (audioCtx) void audioCtx.resume();
     document.removeEventListener("mousedown", handler);
     document.removeEventListener("touchstart", handler);
     document.removeEventListener("keydown", handler);
@@ -1388,7 +1387,8 @@ async function main() {
   startDisplayLoop();
   setupButtonInput();
   setupKeyboardInput();
-  setupAudio();
+  initAudioEarly();
+  setupAudioUnlock();
   showCalculator();
   startEmulationLoop();
   startAutoSave();

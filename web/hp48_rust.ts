@@ -814,7 +814,13 @@ let oscillator: OscillatorNode | null = null;
 let gainNode: GainNode | null = null;
 let playing = false;
 
-function initAudioOnGesture(): void {
+// Create AudioContext at page load rather than on first user gesture.
+// AudioContext can be constructed without a gesture (starts in "suspended"
+// state); only resume() requires a gesture. This moves the expensive
+// driver-init cost off the first click, which previously stalled the main
+// thread ~125ms and caused the first press+release to drain in a single
+// emulation tick, cancelling the key bit before the CPU could observe it.
+function initAudioEarly(): void {
   if (audioCtx) return;
   try {
     const AudioCtor = window.AudioContext
@@ -822,7 +828,6 @@ function initAudioOnGesture(): void {
     if (!AudioCtor) { console.warn("hp48: no AudioContext support"); return; }
 
     audioCtx = new AudioCtor();
-    void audioCtx.resume();
 
     gainNode = audioCtx.createGain();
     gainNode.gain.value = 0;
@@ -854,10 +859,10 @@ function pollSpeaker(): void {
   }
 }
 
-function setupAudio(): void {
+function setupAudioUnlock(): void {
   const handler = (e: Event): void => {
     console.log(`[DIAG] audio unlock  t=${performance.now().toFixed(1)} type=${e.type} target=${(e.target as HTMLElement)?.id || (e.target as HTMLElement)?.tagName}`);
-    initAudioOnGesture();
+    if (audioCtx) void audioCtx.resume();
     document.removeEventListener("mousedown", handler);
     document.removeEventListener("touchstart", handler);
     document.removeEventListener("keydown", handler);
@@ -968,7 +973,8 @@ async function main(): Promise<void> {
   startDisplayLoop();
   setupButtonInput();
   setupKeyboardInput();
-  setupAudio();
+  initAudioEarly();
+  setupAudioUnlock();
   showCalculator();
   startEmulationLoop();
   startAutoSave();
